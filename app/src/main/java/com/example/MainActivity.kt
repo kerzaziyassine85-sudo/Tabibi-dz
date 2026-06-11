@@ -102,6 +102,26 @@ fun DoctorFinderApp(
 
     var activeDetailDoctor by remember { mutableStateOf<Doctor?>(null) }
 
+    val listAllDoctors by viewModel.allDoctors.collectAsState()
+
+    val allMunicipalitiesForSelectedW = remember(selectedW, listAllDoctors) {
+        if (selectedW == null) emptyList()
+        else {
+            val staticMun = AlgeriaData.getMunicipalities(selectedW!!.id)
+            val customMun = listAllDoctors
+                .filter { it.wilayaNameAr == selectedW!!.nameAr || it.wilayaNameEn == selectedW!!.nameEn }
+                .map { it.municipalityNameAr }
+                .filter { it.isNotBlank() }
+            (staticMun + customMun).distinct().sorted()
+        }
+    }
+
+    val allSpecialties = remember(listAllDoctors) {
+        val staticSpec = AlgeriaData.specialties
+        val customSpec = listAllDoctors.map { it.specialty }.filter { it.isNotBlank() }
+        (staticSpec + customSpec).distinct().sorted()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -172,7 +192,7 @@ fun DoctorFinderApp(
 
     if (showMunicipalityDialog && selectedW != null) {
         MunicipalitySelectionDialog(
-            municipalities = AlgeriaData.getMunicipalities(selectedW!!.id),
+            municipalities = allMunicipalitiesForSelectedW,
             selectedMunicipality = selectedM,
             wilayaName = selectedW!!.nameAr,
             onDismiss = { showMunicipalityDialog = false },
@@ -185,7 +205,7 @@ fun DoctorFinderApp(
 
     if (showSpecialtyDialog) {
         SpecialtySelectionDialog(
-            specialties = AlgeriaData.specialties,
+            specialties = allSpecialties,
             selectedSpecialty = selectedS,
             onDismiss = { showSpecialtyDialog = false },
             onSelect = {
@@ -868,6 +888,12 @@ fun ProgrammerPanel(
     val currentWilaya = AlgeriaData.wilayas[selectedWilayaIndex]
     val currentMunicipalities = AlgeriaData.getMunicipalities(currentWilaya.id)
 
+    // Manual custom entries
+    var isCustomSpecialty by remember { mutableStateOf(false) }
+    var customSpecialty by remember { mutableStateOf("") }
+    var isCustomMunicipality by remember { mutableStateOf(false) }
+    var customMunicipality by remember { mutableStateOf("") }
+
     // Expand dropdown state properties
     var showSpecialtyDropdown by remember { mutableStateOf(false) }
     var showWilayaDropdown by remember { mutableStateOf(false) }
@@ -1016,31 +1042,63 @@ fun ProgrammerPanel(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Specialty Selector for Add Form
-                    DropdownPickerItem(
-                        label = "التخصص الطبي",
-                        currentValue = AlgeriaData.specialties[selectedSpecialtyIndex],
-                        onExpandRequest = { showSpecialtyDropdown = true }
+                    // Specialty Manual vs Dropdown Choice
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DropdownMenu(
-                            expanded = showSpecialtyDropdown,
-                            onDismissRequest = { showSpecialtyDropdown = false }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = isCustomSpecialty,
+                                onCheckedChange = { isCustomSpecialty = it }
+                            )
+                            Text("كتابة التخصص يدوياً", fontSize = 12.sp, fontFamily = FontFamily.SansSerif, color = DarkSlate)
+                        }
+                        Text("التخصص الطبي", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = DarkSlate)
+                    }
+
+                    if (isCustomSpecialty) {
+                        OutlinedTextField(
+                            value = customSpecialty,
+                            onValueChange = { customSpecialty = it },
+                            modifier = Modifier.fillMaxWidth().testTag("add_custom_specialty"),
+                            placeholder = { Text("اكتب التخصص الطبي هنا (مثال: طبيب أعصاب متميز)", textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) },
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = DarkSlate,
+                                unfocusedTextColor = DarkSlate,
+                                focusedBorderColor = EmeraldPrimary,
+                                unfocusedBorderColor = Color.LightGray
+                            )
+                        )
+                    } else {
+                        DropdownPickerItem(
+                            label = "اختر التخصص من القائمة",
+                            currentValue = AlgeriaData.specialties[selectedSpecialtyIndex],
+                            onExpandRequest = { showSpecialtyDropdown = true }
                         ) {
-                            AlgeriaData.specialties.forEachIndexed { idx, spec ->
-                                DropdownMenuItem(
-                                    text = { Text(spec, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
-                                    onClick = {
-                                        selectedSpecialtyIndex = idx
-                                        showSpecialtyDropdown = false
-                                    }
-                                )
+                            DropdownMenu(
+                                expanded = showSpecialtyDropdown,
+                                onDismissRequest = { showSpecialtyDropdown = false }
+                            ) {
+                                AlgeriaData.specialties.forEachIndexed { idx, spec ->
+                                    DropdownMenuItem(
+                                        text = { Text(spec, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
+                                        onClick = {
+                                            selectedSpecialtyIndex = idx
+                                            showSpecialtyDropdown = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Wilaya Selector for Add Form
+                    // Wilaya Selector for Add Form (Always Dropdown, since Algeria has 58 Wilayas)
                     DropdownPickerItem(
                         label = "الولاية",
                         currentValue = "${currentWilaya.id} - ${currentWilaya.nameAr}",
@@ -1050,7 +1108,6 @@ fun ProgrammerPanel(
                             expanded = showWilayaDropdown,
                             onDismissRequest = { showWilayaDropdown = false }
                         ) {
-                            // Let's show all 58 Wilayas elegantly as choices or first 20 as primary options to prevent layout overflow
                             AlgeriaData.wilayas.forEachIndexed { idx, w ->
                                 DropdownMenuItem(
                                     text = { Text("${w.id} - ${w.nameAr}", textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
@@ -1064,50 +1121,82 @@ fun ProgrammerPanel(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Municipality Selector for Add Form
-                    DropdownPickerItem(
-                        label = "البلدية",
-                        currentValue = if (currentMunicipalities.isNotEmpty()) currentMunicipalities[selectedMunicipalityIndex % currentMunicipalities.size] else "وسط الولاية",
-                        onExpandRequest = { showMunicipalityDropdown = true }
+                    // Municipality Manual vs Dropdown Choice
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        DropdownMenu(
-                            expanded = showMunicipalityDropdown,
-                            onDismissRequest = { showMunicipalityDropdown = false }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = isCustomMunicipality,
+                                onCheckedChange = { isCustomMunicipality = it }
+                            )
+                            Text("كتابة البلدية يدوياً", fontSize = 12.sp, fontFamily = FontFamily.SansSerif, color = DarkSlate)
+                        }
+                        Text("البلدية", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = DarkSlate)
+                    }
+
+                    if (isCustomMunicipality) {
+                        OutlinedTextField(
+                            value = customMunicipality,
+                            onValueChange = { customMunicipality = it },
+                            modifier = Modifier.fillMaxWidth().testTag("add_custom_municipality"),
+                            placeholder = { Text("اكتب البلدية هنا (مثال: بوزريعة، الشراقة...)", textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) },
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = DarkSlate,
+                                unfocusedTextColor = DarkSlate,
+                                focusedBorderColor = EmeraldPrimary,
+                                unfocusedBorderColor = Color.LightGray
+                            )
+                        )
+                    } else {
+                        DropdownPickerItem(
+                            label = "اختر البلدية من القائمة",
+                            currentValue = if (currentMunicipalities.isNotEmpty()) currentMunicipalities[selectedMunicipalityIndex % currentMunicipalities.size] else "وسط الولاية",
+                            onExpandRequest = { showMunicipalityDropdown = true }
                         ) {
-                            currentMunicipalities.forEachIndexed { idx, m ->
-                                DropdownMenuItem(
-                                    text = { Text(m, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
-                                    onClick = {
-                                        selectedMunicipalityIndex = idx
-                                        showMunicipalityDropdown = false
-                                    }
-                                )
+                            DropdownMenu(
+                                expanded = showMunicipalityDropdown,
+                                onDismissRequest = { showMunicipalityDropdown = false }
+                            ) {
+                                currentMunicipalities.forEachIndexed { idx, m ->
+                                    DropdownMenuItem(
+                                        text = { Text(m, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth()) },
+                                        onClick = {
+                                            selectedMunicipalityIndex = idx
+                                            showMunicipalityDropdown = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
                     // Submit Button
                     Button(
                         onClick = {
-                            if (docName.isBlank() || docPhone.isBlank() || docAddress.isBlank()) {
-                                onShowToast("الرجاء ملء جميع الحقول المطلوبة")
+                            val finalSpecialty = if (isCustomSpecialty) customSpecialty else AlgeriaData.specialties[selectedSpecialtyIndex]
+                            val finalMunicipality = if (isCustomMunicipality) customMunicipality else {
+                                if (currentMunicipalities.isNotEmpty()) currentMunicipalities[selectedMunicipalityIndex % currentMunicipalities.size] else "وسط الولاية"
+                            }
+
+                            if (docName.isBlank() || docPhone.isBlank() || docAddress.isBlank() || finalSpecialty.isBlank() || finalMunicipality.isBlank()) {
+                                onShowToast("الرجاء ملء جميع الحقول المطلوبة بما في ذلك التخصص والبلدية")
                             } else {
                                 val priceInt = docPriceStr.toIntOrNull() ?: 2000
-                                val munName = if (currentMunicipalities.isNotEmpty()) {
-                                    currentMunicipalities[selectedMunicipalityIndex % currentMunicipalities.size]
-                                } else {
-                                    "وسط الولاية"
-                                }
 
                                 viewModel.addDoctor(
                                     name = docName,
-                                    specialty = AlgeriaData.specialties[selectedSpecialtyIndex],
+                                    specialty = finalSpecialty,
                                     wilaya = currentWilaya,
-                                    municipality = munName,
+                                    municipality = finalMunicipality,
                                     phone = docPhone,
                                     address = docAddress,
                                     price = priceInt,
@@ -1119,6 +1208,10 @@ fun ProgrammerPanel(
                                 docName = ""
                                 docPhone = ""
                                 docAddress = ""
+                                customSpecialty = ""
+                                customMunicipality = ""
+                                isCustomSpecialty = false
+                                isCustomMunicipality = false
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent),
