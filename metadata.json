@@ -1,0 +1,8 @@
+{
+  "name": "Tabibi-dz",
+  "description": "تطبيق للبحث عن الأطباء في الجزائر بالولاية، البلدية، والتخصص مع لوحة تحكم للمبرمج والمستخدم.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
